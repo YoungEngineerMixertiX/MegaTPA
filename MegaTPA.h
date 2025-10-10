@@ -1,15 +1,3 @@
-/**
- * @file MegaTPA.h
- * @author Qwen & 12yo Time Master (c) 2025
- * @brief Minimalist Arduino Library — Timers, Buttons, PWM
- * 
- * trm → Timer      : .end() / .oneEnd() — чистый if-стиль
- * bnm → Button     : .pressed() / .statechange() / .released()
- * stm → SoftPWM    : .set(0-255) — auto 15kHz
- * 
- * Никаких callback, reset, update — только if (timer.end()) { ... }
- */
-
 #ifndef MEGATPA_H
 #define MEGATPA_H
 
@@ -64,6 +52,39 @@ class stm {
   public:
     stm(int pin);
     void set(byte duty);
+    byte getDuty() const { return _duty; }; // Добавлен метод для получения текущего значения duty
+};
+
+// =====================================================================
+// CLASS: bldc — BLDC Motor Driver
+// =====================================================================
+class bldc {
+private:
+    int _pins[3];         // Пины для управления мотором (например, 2, 3, 4)
+    byte _speed;          // Текущая скорость (0-255)
+    byte _minSpeed;       // Минимальная скорость (по умолчанию 5)
+    byte _maxSpeed;       // Максимальная скорость (по умолчанию 255)
+    bool _loopMode;       // Режим циклического запуска
+    bool _paused;         // Флаг паузы (если loop() был вызван, но resume() еще не был)
+
+public:
+    // Конструктор: пины мотора
+    bldc(int pin1, int pin2, int pin3);
+
+    // Управление скоростью
+    void writespeed(byte speed); // Установить скорость (0-255)
+    void maxs();                  // Установить максимальную скорость
+    void mins();                  // Установить минимальную скорость
+    void loop();                 // Включить режим циклического запуска
+    void resume();               // Возобновить работу
+    void setMinSpeed(byte minSpeed); // Установить минимальную скорость
+    void setMaxSpeed(byte maxSpeed); // Установить максимальную скорость
+    byte getSpeed() const { return _speed; }; // Получить текущую скорость
+    bool isLooping() const { return _loopMode; };
+    bool isPaused() const { return _paused; };
+
+    // Обновление состояния мотора (если нужно)
+    void update(); // Вызывается в loop() для управления мотором
 };
 
 #endif

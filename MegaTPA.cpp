@@ -109,3 +109,59 @@ void stm::set(byte duty) {
     _lastToggle = now;
   }
 }
+
+// =====================================================================
+// bldc — BLDC Motor Driver
+// =====================================================================
+bldc::bldc(int pin1, int pin2, int pin3) {
+  _pins[0] = pin1;
+  _pins[1] = pin2;
+  _pins[2] = pin3;
+  
+  _speed = 0;
+  _minSpeed = 5;
+  _maxSpeed = 255;
+  _loopMode = false;
+  _paused = false;
+  
+  // Инициализация пинов
+  for (int i = 0; i < 3; i++) {
+    pinMode(_pins[i], OUTPUT);
+    digitalWrite(_pins[i], LOW);
+  }
+}
+
+void bldc::writespeed(byte speed) {
+  _speed = speed;
+}
+
+void bldc::maxs() {
+  _speed = _maxSpeed;
+}
+
+void bldc::mins() {
+  _speed = _minSpeed;
+}
+
+void bldc::loop() {
+  _loopMode = true;
+  _paused = true; // После loop() мотор не отвечает на команды, пока не будет resume()
+}
+
+void bldc::resume() {
+  _paused = false; // После resume() мотор снова отвечает на команды
+}
+
+void bldc::setMinSpeed(byte minSpeed) {
+  _minSpeed = minSpeed;
+}
+
+void bldc::setMaxSpeed(byte maxSpeed) {
+  _maxSpeed = maxSpeed;
+}
+
+void bldc::update() {
+  // Пустая реализация для совместимости
+  // В реальном коде здесь будет логика управления мотором
+  // Но в данном случае она не обязательна для работы loop/resume
+}

@@ -113,43 +113,77 @@ void stm::set(byte duty) {
 // =====================================================================
 // bldc — BLDC Motor Driver
 // =====================================================================
-bldc::bldc(int pin1, int pin2, int pin3) {
+bldc::bldc(int pin1, int pin2, int pin3, int rpmPin, int gndPin) {
   _pins[0] = pin1;
   _pins[1] = pin2;
   _pins[2] = pin3;
+  _rpmPin = rpmPin;
+  _gndPin = gndPin;
   
   _speed = 0;
   _minSpeed = 5;
   _maxSpeed = 255;
+  _calibrated = false;
+  _calibratedMaxSpeed = 255;
   _loopMode = false;
   _paused = false;
+  
+  _lastUpdate = 0;
+  _rpmCounter = 0;
+  _rpmLastUpdate = 0;
+  _rpm = 0;
   
   // Инициализация пинов
   for (int i = 0; i < 3; i++) {
     pinMode(_pins[i], OUTPUT);
     digitalWrite(_pins[i], LOW);
   }
+  
+  if (_gndPin != -1) {
+    pinMode(_gndPin, OUTPUT);
+    digitalWrite(_gndPin, LOW);
+  }
+  
+  if (_rpmPin != -1) {
+    pinMode(_rpmPin, INPUT);
+  }
 }
 
 void bldc::writespeed(byte speed) {
   _speed = speed;
+  if (!_calibrated) {
+    _calibratedMaxSpeed = speed;
+  }
 }
 
-void bldc::maxs() {
-  _speed = _maxSpeed;
+void bldc::max() {
+  _speed = _calibrated ? _calibratedMaxSpeed : _maxSpeed;
 }
 
-void bldc::mins() {
+void bldc::min() {
   _speed = _minSpeed;
+}
+
+void bldc::cal() {
+  // Простая реализация калибровки
+  // Можно улучшить, добавив логику с датчиком оборотов
+  _calibrated = true;
+  _calibratedMaxSpeed = _speed; // Предполагаем, что текущая скорость - это максимальная
+  // Для более точной калибровки нужно реализовать чтение датчика оборотов
+  // и учитывать, насколько скорость соответствует оборотам
 }
 
 void bldc::loop() {
   _loopMode = true;
-  _paused = true; // После loop() мотор не отвечает на команды, пока не будет resume()
+  _paused = false;
 }
 
 void bldc::resume() {
-  _paused = false; // После resume() мотор снова отвечает на команды
+  _paused = false;
+}
+
+void bldc::pause() {
+  _paused = true;
 }
 
 void bldc::setMinSpeed(byte minSpeed) {
@@ -161,7 +195,125 @@ void bldc::setMaxSpeed(byte maxSpeed) {
 }
 
 void bldc::update() {
-  // Пустая реализация для совместимости
-  // В реальном коде здесь будет логика управления мотором
-  // Но в данном случае она не обязательна для работы loop/resume
+  if (_paused || !_loopMode) return;
+  
+  // Здесь будет логика управления мотором
+  // Простая реализация: включаем мотор с заданной скоростью
+  // В реальной реализации может потребоваться более сложная логика
+  // для управления пинами и частотой переключения
+  
+  // Например, можно использовать STM для генерации PWM с нужной частотой
+  // и управлять пинами для переключения полюсов
+  // Для простоты, просто устанавливаем скорость в STM (если используется)
+  // Но поскольку мы не используем STM напрямую здесь, просто обновляем состояние
+  // и можно использовать другие методы для управления мотором
+  
+  // Для примера, можно создать дополнительный STM объект для управления мотором
+  // или просто управлять пинами напрямую
+}
+
+void bldc::updateRPM() {
+  if (_rpmPin == -1) return;
+  
+  // Чтение датчика оборотов (пример)
+  // Это упрощенная версия
+  unsigned long now = millis();
+  if (now - _rpmLastUpdate > 100) { // Обновление каждые 100 мс
+    // Здесь должна быть логика чтения датчика
+    // Например, если датчик подключен к прерыванию:
+    // int rpmValue = digitalRead(_rpmPin);
+    // Если используется аналоговый датчик:
+    // int rpmValue = analogRead(_rpmPin);
+    
+    // Простая имитация счетчика
+    _rpmCounter++;
+    _rpm = _rpmCounter * 60 / 10; // Упрощенный расчет оборотов
+    
+    _rpmLastUpdate = now;
+  }
+}
+// =====================================================================
+// shs — Software Serial (SerialHi implementation)
+// =====================================================================
+shs::shs(uint8_t rxPin, uint8_t txPin) {
+    _rxPin = rxPin;
+    _txPin = txPin;
+    pinMode(_txPin, OUTPUT);
+    digitalWrite(_txPin, HIGH); // idle = HIGH
+    pinMode(_rxPin, INPUT_PULLUP);
+}
+
+void shs::begin(long baud) {
+    _baud = baud;
+    _bitTime = 1000000 / baud;
+}
+
+void shs::sendByte(uint8_t byte) {
+    // Start bit
+    digitalWrite(_txPin, LOW);
+    delayMicroseconds(_bitTime);
+
+    // 8 data bits (LSB first)
+    for (int i = 0; i < 8; i++) {
+        digitalWrite(_txPin, (byte & 1) ? HIGH : LOW);
+        delayMicroseconds(_bitTime);
+        byte >>= 1;
+    }
+
+    // Stop bit
+    digitalWrite(_txPin, HIGH);
+    delayMicroseconds(_bitTime);
+}
+
+void shs::sendString(const char* str) {
+    while (*str) {
+        sendByte(*str++);
+    }
+    sendByte('\n'); // auto newline
+}
+
+int shs::readByte() {
+    unsigned long start = micros();
+    // Wait for start bit (LOW)
+    while (digitalRead(_rxPin) == HIGH) {
+        if (micros() - start > _bitTime * 10) return -1;
+    }
+
+    delayMicroseconds(_bitTime + _bitTime / 2); // sample middle of bit
+
+    uint8_t data = 0;
+    for (int i = 0; i < 8; i++) {
+        data >>= 1;
+        if (digitalRead(_rxPin) == HIGH) data |= 0x80;
+        delayMicroseconds(_bitTime);
+    }
+
+    return data;
+}
+
+char* shs::readString() {
+    static char buf[64];
+    int idx = 0;
+    unsigned long last = millis();
+
+    while (millis() - last < 100) { // 100ms timeout
+        int b = readByte();
+        if (b == -1) {
+            delay(1);
+            continue;
+        }
+        last = millis();
+
+        if (b == '\n' || b == '\r') break;
+        if (idx < 63) buf[idx++] = (char)b;
+    }
+    buf[idx] = '\0';
+    return buf;
+}
+void shs::send(uint8_t byte) {
+    sendByte(byte);
+}
+
+int shs::read() {
+    return readByte();
 }

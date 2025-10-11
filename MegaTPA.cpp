@@ -156,11 +156,11 @@ void bldc::writespeed(byte speed) {
   }
 }
 
-void bldc::max() {
+void bldc::maxs() {
   _speed = _calibrated ? _calibratedMaxSpeed : _maxSpeed;
 }
 
-void bldc::min() {
+void bldc::mins() {
   _speed = _minSpeed;
 }
 
@@ -317,3 +317,4 @@ void shs::send(uint8_t byte) {
 int shs::read() {
     return readByte();
 }
+
